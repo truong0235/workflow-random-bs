@@ -1,0 +1,32 @@
+From 2c78339421dc98d7b117026ba5eb5d54d672c66e Mon Sep 17 00:00:00 2001
+From: truong0235 <truong0235@users.noreply.github.com>
+Date: Thu, 3 Sep 2026 23:00:10 +0700
+Subject: [PATCH] fix: add SRGB to isWideColorMode
+
+isWideColorMode() returns false for SRGB, preventing SurfaceFlinger
+from populating mColorModes map. This forces display to stay in
+NATIVE color mode, skipping sRGB transfer function application.
+
+Camera preview shows green tint because camera CCM (color correction
+matrix) is computed but never applied to display output. Adding SRGB
+to the wide color modes allows SF to select SRGB mode, applying the
+sRGB transfer function and fixing the green tint.
+---
+ services/surfaceflinger/SurfaceFlinger.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
+index b078bf2..6287c4a 100644
+--- a/services/surfaceflinger/SurfaceFlinger.cpp
++++ b/services/surfaceflinger/SurfaceFlinger.cpp
+@@ -13,6 +13,7 @@ bool isWideColorMode(const ColorMode colorMode) {
+         case ColorMode::BT2100_PQ:
+         case ColorMode::BT2100_HLG:
+             return true;
++        case ColorMode::SRGB:
+         case ColorMode::NATIVE:
+         case ColorMode::STANDARD_BT601_625:
+         case ColorMode::STANDARD_BT601_625_UNADJUSTED:
+-- 
+2.55.0
+
