@@ -90,8 +90,9 @@ jobs:
       run: |
         git config --global user.email "runner@github.com"
         git config --global user.name "GitHub Runner"
+        PATCH_PATH="${{ github.workspace }}/patches/0001-fix-wide-color-mode.patch"
         cd frameworks/native
-        git am "$GITHUB_WORKSPACE/patches/0001-fix-wide-color-mode.patch"
+        git am "$PATCH_PATH"
         echo "=== Patch applied ==="
         git log --oneline -1
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
