@@ -88,6 +88,8 @@ jobs:
 
     - name: Apply patch
       run: |
+        git config --global user.email "runner@github.com"
+        git config --global user.name "GitHub Runner"
         cd frameworks/native
         git am "$GITHUB_WORKSPACE/patches/0001-fix-wide-color-mode.patch"
         echo "=== Patch applied ==="
