@@ -2,8 +2,8 @@ name: Build AOSP GSI
 
 
 on:
-  push:
-    branches: [main]
+  #push:
+   # branches: [main]
   workflow_dispatch:
     inputs:
       AOSP_BRANCH:

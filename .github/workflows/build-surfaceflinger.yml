@@ -2,6 +2,8 @@ name: Build Patched surfaceflinger
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
     inputs:
       AOSP_BRANCH:
         description: 'AOSP manifest branch'
@@ -16,6 +18,9 @@ jobs:
     env:
       AOSP_BRANCH: ${{ inputs.AOSP_BRANCH || 'android-13.0.0_r51' }}
     steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
     - name: Free disk space
       run: |
         sudo rm -rf /usr/local/lib/android || true
@@ -91,6 +96,8 @@ jobs:
         git config --global user.email "runner@github.com"
         git config --global user.name "GitHub Runner"
         PATCH_PATH="${{ github.workspace }}/patches/0001-fix-wide-color-mode.patch"
+        echo "Looking for patch at: $PATCH_PATH"
+        ls -la "$(dirname "$PATCH_PATH")"
         cd frameworks/native
         git am "$PATCH_PATH"
         echo "=== Patch applied ==="
