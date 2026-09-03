@@ -2,8 +2,6 @@ name: Build Patched surfaceflinger
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
     inputs:
       AOSP_BRANCH:
         description: 'AOSP manifest branch'
@@ -62,7 +60,7 @@ jobs:
     - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
       with:
-        swap-size-gb: 2
+        swap-size-gb: 12
 
     - name: Repo init AOSP
       run: |
@@ -164,9 +162,9 @@ jobs:
         echo "::endgroup::"
 
         # Verify output exists
-        SF_BIN="out/target/product/phh_treble/system/bin/surfaceflinger"
-        if [ ! -f "$SF_BIN" ]; then
-          echo "ERROR: surfaceflinger binary not found at $SF_BIN"
+        SF_BIN="$(find out/target/product -path '*/system/bin/surfaceflinger' -type f | head -n 1)"
+        if [ -z "$SF_BIN" ]; then
+          echo "ERROR: surfaceflinger binary not found"
           find out/target/product -name "surfaceflinger" -type f 2>/dev/null
           exit 1
         fi
@@ -182,7 +180,12 @@ jobs:
     - name: Package APatch module
       run: |
         MODULE_DIR="$GITHUB_WORKSPACE/frost-sf-colorfix-module"
-        SF_BIN="${{ steps.pwd.outputs.workspace-folder }}/out/target/product/phh_treble/system/bin/surfaceflinger"
+        SF_BIN="$(find ${{ steps.pwd.outputs.workspace-folder }}/out/target/product -path '*/system/bin/surfaceflinger' -type f | head -n 1)"
+
+        if [ -z "$SF_BIN" ]; then
+          echo "ERROR: surfaceflinger binary not found"
+          exit 1
+        fi
 
         mkdir -p "$MODULE_DIR/system/bin"
         mkdir -p "$MODULE_DIR/system/etc/init"
