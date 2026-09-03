@@ -173,116 +173,30 @@ jobs:
         MODULE_DIR="$GITHUB_WORKSPACE/frost-sf-colorfix-module"
         SF_BIN="${{ steps.pwd.outputs.workspace-folder }}/out/target/product/phh_treble/system/bin/surfaceflinger"
 
-        # Create module directory structure
         mkdir -p "$MODULE_DIR/system/bin"
         mkdir -p "$MODULE_DIR/system/etc/init"
+        mkdir -p "$MODULE_DIR/META-INF/com/google/android"
 
-        # Copy patched binary
         cp "$SF_BIN" "$MODULE_DIR/system/bin/surfaceflinger_patched"
         chmod 755 "$MODULE_DIR/system/bin/surfaceflinger_patched"
 
-        # Create module.prop
-        cat > "$MODULE_DIR/module.prop" << 'EOF'
-id=frost-sf-colorfix
-name=Frost SF Color Fix
-version=v1
-versionCode=1
-author=truong0235
-description=Fixes camera green tint by patching SurfaceFlinger to select SRGB color mode
-EOF
+        printf 'id=frost-sf-colorfix\nname=Frost SF Color Fix\nversion=v1\nversionCode=1\nauthor=truong0235\ndescription=Fixes camera green tint by patching SurfaceFlinger to select SRGB color mode\n' > "$MODULE_DIR/module.prop"
 
-        # Create post-fs-data.sh - bind mount patched binary at boot
-        cat > "$MODULE_DIR/post-fs-data.sh" << 'POSTFSDATA'
-#!/system/bin/sh
-MODDIR=${0%/*}
-
-# Restore original if it exists
-if [ -f /system/bin/surfaceflinger.bak ]; then
-  mount --bind /system/bin/surfaceflinger.bak /system/bin/surfaceflinger 2>/dev/null
-fi
-
-# Mount patched binary
-mount --bind "$MODDIR/system/bin/surfaceflinger_patched" /system/bin/surfaceflinger 2>/dev/null
-
-# Fix SELinux context
-chcon u:object_r:surfaceflinger_exec:s0 /system/bin/surfaceflinger 2>/dev/null
-
-# Set properties for wide color display
-resetprop ro.surface_flinger.has_wide_color_display true 2>/dev/null
-resetprop persist.sys.sf.native_mode 2 2>/dev/null
-resetprop persist.sys.sf.color_mode 7 2>/dev/null
-POSTFSDATA
+        printf '#!/system/bin/sh\nMODDIR=${0%%/*}\n\nif [ -f /system/bin/surfaceflinger.bak ]; then\n  mount --bind /system/bin/surfaceflinger.bak /system/bin/surfaceflinger 2>/dev/null\nfi\n\nmount --bind "$MODDIR/system/bin/surfaceflinger_patched" /system/bin/surfaceflinger 2>/dev/null\n\nchcon u:object_r:surfaceflinger_exec:s0 /system/bin/surfaceflinger 2>/dev/null\n\nresetprop ro.surface_flinger.has_wide_color_display true 2>/dev/null\nresetprop persist.sys.sf.native_mode 2 2>/dev/null\nresetprop persist.sys.sf.color_mode 7 2>/dev/null\n' > "$MODULE_DIR/post-fs-data.sh"
         chmod 755 "$MODULE_DIR/post-fs-data.sh"
 
-        # Create system.prop
-        cat > "$MODULE_DIR/system.prop" << 'SYSEOF'
-ro.surface_flinger.has_wide_color_display=true
-persist.sys.sf.native_mode=2
-persist.sys.sf.color_mode=7
-SYSEOF
+        printf 'ro.surface_flinger.has_wide_color_display=true\npersist.sys.sf.native_mode=2\npersist.sys.sf.color_mode=7\n' > "$MODULE_DIR/system.prop"
 
-        # Create service.sh for additional runtime fixes
-        cat > "$MODULE_DIR/service.sh" << 'SERVICESH'
-#!/system/bin/sh
-# Apply color mode after boot completes
-while [ "$(getprop sys.boot_completed)" != "1" ]; do
-  sleep 1
-done
-
-sleep 5
-
-# Force service call to trigger color mode
-service call SurfaceFlinger 1023 i32 2 i32 7 2>/dev/null
-SERVICESH
+        printf '#!/system/bin/sh\nwhile [ "$(getprop sys.boot_completed)" != "1" ]; do\n  sleep 1\ndone\nsleep 5\nservice call SurfaceFlinger 1023 i32 2 i32 7 2>/dev/null\n' > "$MODULE_DIR/service.sh"
         chmod 755 "$MODULE_DIR/service.sh"
 
-        # Create META-INF for Magisk/APatch zip
-        mkdir -p "$MODULE_DIR/META-INF/com/google/android"
-        cat > "$MODULE_DIR/META-INF/com/google/android/update-binary" << 'UPDATEBINARY'
-#!/sbin/sh
-
-#################
-# Initialization
-#################
-
-umask 022
-
-# echo before loading util_functions
-ui_print() { echo "$1"; }
-
-require_new_magisk() {
-  ui_print "*******************************"
-  ui_print " Please install Magisk v20.4+! "
-  ui_print "*******************************"
-  exit 1
-}
-
-#########################
-# Load util_functions.sh
-#########################
-
-OUTFD=$2
-ZIPFILE=$3
-
-mount /data 2>/dev/null
-
-[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk
-. /data/adb/magisk/util_functions.sh
-[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
-
-install_module
-exit 0
-UPDATEBINARY
+        printf '#!/sbin/sh\numask 022\nui_print() { echo "$1"; }\nrequire_new_magisk() {\n  ui_print " Please install Magisk v20.4+! "\n  exit 1\n}\nOUTFD=$2\nZIPFILE=$3\nmount /data 2>/dev/null\n[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk\n. /data/adb/magisk/util_functions.sh\n[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk\ninstall_module\nexit 0\n' > "$MODULE_DIR/META-INF/com/google/android/update-binary"
         chmod 755 "$MODULE_DIR/META-INF/com/google/android/update-binary"
 
-        cat > "$MODULE_DIR/META-INF/com/google/android/updater-script" << 'UPDATERSCRIPT'
-#MAGISK
-UPDATERSCRIPT
+        printf '#MAGISK\n' > "$MODULE_DIR/META-INF/com/google/android/updater-script"
 
-        # Create the zip
         cd "$MODULE_DIR"
-        zip -r9 "$GITHUB_WORKSPACE/frost-sf-colorfix.zip" . \
-          -x ".*" -x "*/\.*"
+        zip -r9 "$GITHUB_WORKSPACE/frost-sf-colorfix.zip" . -x ".*" -x "*/\.*"
 
         echo "=== Module zip created ==="
         ls -lh "$GITHUB_WORKSPACE/frost-sf-colorfix.zip"
