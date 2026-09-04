@@ -90,17 +90,26 @@ jobs:
         du -sh .
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
-    - name: Apply patch
+    - name: Apply patches
       run: |
         git config --global user.email "runner@github.com"
         git config --global user.name "GitHub Runner"
-        PATCH_PATH="${{ github.workspace }}/patches/0001-fix-wide-color-mode.patch"
-        echo "Looking for patch at: $PATCH_PATH"
-        ls -la "$(dirname "$PATCH_PATH")"
         cd frameworks/native
-        git am "$PATCH_PATH"
-        echo "=== Patch applied ==="
+
+        # Patch 1: isWideColorMode fix (SurfaceFlinger.cpp)
+        echo "=== Applying patch 1: isWideColorMode fix ==="
+        git am "${{ github.workspace }}/patches/0001-fix-wide-color-mode.patch"
         git log --oneline -1
+
+        # Patches 2-4: Output.cpp fixes (outputDataspace, UNKNOWN override, per-layer CCM)
+        echo "=== Applying patches 2-4: Output.cpp fixes ==="
+        git am \
+          "${{ github.workspace }}/patches/0002-fix-output-dataspace.patch" \
+          "${{ github.workspace }}/patches/0003-fix-unknown-dataspace.patch" \
+          "${{ github.workspace }}/patches/0004-layer-color-transform.patch"
+
+        echo "=== All patches applied ==="
+        git log --oneline -4
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Free disk after sync
@@ -195,12 +204,12 @@ jobs:
         cp "$SF_BIN" "$MODULE_DIR/system/bin/surfaceflinger"
         chmod 755 "$MODULE_DIR/system/bin/surfaceflinger"
 
-        printf 'id=frost-sf-colorfix\nname=Frost SF Color Fix\nversion=v1\nversionCode=1\nauthor=truong0235\ndescription=Fixes camera green tint by patching SurfaceFlinger to select SRGB color mode\n' > "$MODULE_DIR/module.prop"
+        printf 'id=frost-sf-colorfix\nname=Frost SF Color Fix\nversion=v2\nversionCode=2\nauthor=truong0235\ndescription=Fixes camera green tint and video pink tint by patching SurfaceFlinger color pipeline\n' > "$MODULE_DIR/module.prop"
 
-        printf '#!/system/bin/sh\nMODDIR=${0%%/*}\n\n# Apply SELinux rules for patched binary\nmagiskpolicy --live "allow init surfaceflinger_exec file { read open getattr execute execute_no_trans map }" "allow init surfaceflinger process transition sigchld" "allow init surfaceflinger process2 nosuid_transition" 2>/dev/null\n\n# Set properties\nresetprop ro.surface_flinger.has_wide_color_display true 2>/dev/null\nresetprop persist.sys.sf.native_mode 2 2>/dev/null\nresetprop persist.sys.sf.color_mode 7 2>/dev/null\n' > "$MODULE_DIR/post-fs-data.sh"
+        printf '#!/system/bin/sh\nMODDIR=${0%%/*}\n\n# Apply SELinux rules for patched binary\nmagiskpolicy --live "allow init surfaceflinger_exec file { read open getattr execute execute_no_trans map }" "allow init surfaceflinger process transition sigchld" "allow init surfaceflinger process2 nosuid_transition" 2>/dev/null\n\n# Set properties for display color mode\nresetprop ro.surface_flinger.has_wide_color_display true 2>/dev/null\nresetprop persist.sys.sf.native_mode 2 2>/dev/null\nresetprop persist.sys.sf.color_mode 7 2>/dev/null\n\n# Set per-layer color correction for camera preview\n# Camera CCM from hi1337 sensor (rational[9] converted to float)\nresetprop persist.sys.sf.layer_pattern "opencamera" 2>/dev/null\nresetprop persist.sys.sf.layer_ccm "0.6094,-0.8203,-0.3125,0,0.0469,1.8359,0.6094,0,-0.1172,-0.0469,0.3125,0,0,0,0,1" 2>/dev/null\n' > "$MODULE_DIR/post-fs-data.sh"
         chmod 755 "$MODULE_DIR/post-fs-data.sh"
 
-        printf 'ro.surface_flinger.has_wide_color_display=true\npersist.sys.sf.native_mode=2\npersist.sys.sf.color_mode=7\n' > "$MODULE_DIR/system.prop"
+        printf 'ro.surface_flinger.has_wide_color_display=true\npersist.sys.sf.native_mode=2\npersist.sys.sf.color_mode=7\npersist.sys.sf.layer_pattern=opencamera\npersist.sys.sf.layer_ccm=0.6094,-0.8203,-0.3125,0,0.0469,1.8359,0.6094,0,-0.1172,-0.0469,0.3125,0,0,0,0,1\n' > "$MODULE_DIR/system.prop"
 
         printf '#!/system/bin/sh\nwhile [ "$(getprop sys.boot_completed)" != "1" ]; do\n  sleep 1\ndone\nsleep 5\nservice call SurfaceFlinger 1023 i32 2 i32 7 2>/dev/null\n' > "$MODULE_DIR/service.sh"
         chmod 755 "$MODULE_DIR/service.sh"
@@ -240,7 +249,11 @@ jobs:
         body: |
           # Patched surfaceflinger for Poco C40 (frost)
           # Branch: ${{ env.AOSP_BRANCH }}
-          # Fix: adds SRGB to isWideColorMode() for camera green tint
+          # Fixes:
+          # - isWideColorMode: SRGB counted as wide color for display mode selection
+          # - composeSurfaces: outputDataspace always uses display color mode
+          # - UNKNOWN dataspace override: vendor NV12 layers use BT.709 conversion
+          # - Per-layer colorTransform: camera CCM applied via system property
           # Install via APatch/Magisk Manager
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

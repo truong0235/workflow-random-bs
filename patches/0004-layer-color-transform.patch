@@ -1,0 +1,102 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: truong0235 <truong0235@users.noreply.github.com>
+Date: Thu, 4 Sep 2026 12:00:00 +0700
+Subject: [PATCH 4/4] feat: per-layer colorTransform from system property
+
+Apply a color correction matrix to layers matching a name pattern,
+read from system properties. This fixes camera preview green tint by
+applying the camera CCM (color correction matrix) as a layer-level
+colorTransform.
+
+System properties:
+  persist.sys.sf.layer_pattern - substring to match in layer name
+  persist.sys.sf.layer_ccm     - 16 comma-separated floats (column-major 4x4)
+
+Example (camera CCM for Poco C40):
+  resetprop persist.sys.sf.layer_pattern "opencamera"
+  resetprop persist.sys.sf.layer_ccm \
+    "0.6094,-0.8203,-0.3125,0,0.0469,1.8359,0.6094,0,-0.1172,-0.0469,0.3125,0,0,0,0,1"
+---
+ services/surfaceflinger/CompositionEngine/src/Output.cpp | 50 +++++++++++++++++
+ 1 file changed, 50 insertions(+)
+
+diff --git a/services/surfaceflinger/CompositionEngine/src/Output.cpp b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+index abcdef1..1234567 100644
+--- a/services/surfaceflinger/CompositionEngine/src/Output.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+@@ -1310,6 +1310,54 @@ void Output::composeSurfaces(
+     return base::unique_fd(fence->dup());
+ }
+ 
++// Parse a comma-separated list of 16 floats into a mat4 (column-major)
++static bool parseColorTransform(const char* str, math::mat4& outMatrix) {
++    if (!str || !*str) return false;
++
++    float values[16];
++    int count = 0;
++    const char* p = str;
++
++    while (count < 16 && *p) {
++        char* end;
++        float v = strtof(p, &end);
++        if (end == p) return false; // parse error
++        values[count++] = v;
++        if (*end == ',') ++end;
++        p = end;
++    }
++
++    if (count != 16) return false;
++
++    // Copy as column-major mat4
++    memcpy(&outMatrix, values, sizeof(values));
++    return true;
++}
++
++// Get the cached per-layer colorTransform from system properties.
++// Returns true if a valid transform was found.
++static bool getLayerColorTransform(math::mat4& outMatrix, std::string& outPattern) {
++    static bool loaded = false;
++    static bool valid = false;
++    static math::mat4 cachedMatrix;
++    static std::string cachedPattern;
++
++    if (!loaded) {
++        loaded = true;
++        std::string ccm = android::base::GetProperty("persist.sys.sf.layer_ccm", "");
++        cachedPattern = android::base::GetProperty("persist.sys.sf.layer_pattern", "");
++
++        if (!ccm.empty() && !cachedPattern.empty()) {
++            valid = parseColorTransform(ccm.c_str(), cachedMatrix);
++        }
++    }
++
++    if (valid) {
++        outMatrix = cachedMatrix;
++        outPattern = cachedPattern;
++    }
++    return valid;
++}
++
+ std::vector<LayerFE::LayerSettings> Output::generateClientCompositionRequests(
+       bool supportsProtectedContent, ui::Dataspace outputDataspace, std::vector<LayerFE*>& outLayerFEs) {
+     std::vector<LayerFE::LayerSettings> clientCompositionLayers;
+@@ -1393,6 +1441,16 @@ std::vector<LayerFE::LayerSettings> Output::generateClientCompositionRequests(
+                     if (result.sourceDataspace == ui::Dataspace::UNKNOWN) {
+                         result.sourceDataspace = ui::Dataspace::V0_SRGB;
+                     }
++
++                    // Apply per-layer colorTransform from system property
++                    math::mat4 layerCCM;
++                    std::string layerPattern;
++                    if (getLayerColorTransform(layerCCM, layerPattern)) {
++                        const char* name = layerFE.getDebugName();
++                        if (name && strstr(name, layerPattern.c_str())) {
++                            result.colorTransform = layerCCM;
++                        }
++                    }
+                 }
+             }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: truong0235 <truong0235@users.noreply.github.com>
+Date: Thu, 4 Sep 2026 12:00:00 +0700
+Subject: [PATCH 2/3] fix: force outputDataspace in composeSurfaces
+
+Remove the hasWideColorGamut() gate on outputDataspace in
+composeSurfaces(). This ensures the GPU always uses the display's
+color mode dataspace for client composition, even if
+hasWideColorGamut() returns false for any reason.
+
+Without this, when hasWideColorGamut() is false, the outputDataspace
+is forced to UNKNOWN, causing the RenderEngine to skip sRGB transfer
+function application and use default (BT.601) YUV-to-RGB conversion
+for all layers.
+---
+ services/surfaceflinger/CompositionEngine/src/Output.cpp | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/services/surfaceflinger/CompositionEngine/src/Output.cpp b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+index abcdef1..1234567 100644
+--- a/services/surfaceflinger/CompositionEngine/src/Output.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+@@ -1200,9 +1200,8 @@ void Output::composeSurfaces(
+     clientCompositionDisplay.orientation =
+             ui::Transform::toRotationFlags(outputState.displaySpace.getOrientation());
+-    clientCompositionDisplay.outputDataspace = mDisplayColorProfile->hasWideColorGamut()
+-            ? outputState.dataspace
+-            : ui::Dataspace::UNKNOWN;
++    // Always use the display's dataspace for client composition output
++    clientCompositionDisplay.outputDataspace = outputState.dataspace;
+ 
+     // If we have a valid current display brightness use that, otherwise fall back to the
+     // display's max desired
+-- 
+2.55.0
+
