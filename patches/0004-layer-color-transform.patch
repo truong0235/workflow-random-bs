@@ -1,7 +1,7 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From 25b7ab923c7f44542a1066cd1e8cec206370b19d Mon Sep 17 00:00:00 2001
 From: truong0235 <truong0235@users.noreply.github.com>
-Date: Thu, 4 Sep 2026 12:00:00 +0700
-Subject: [PATCH 4/4] feat: per-layer colorTransform from system property
+Date: Fri, 4 Sep 2026 12:00:00 +0700
+Subject: [PATCH] feat: per-layer colorTransform from system property
 
 Apply a color correction matrix to layers matching a name pattern,
 read from system properties. This fixes camera preview green tint by
@@ -15,16 +15,24 @@ System properties:
 Example (camera CCM for Poco C40):
   resetprop persist.sys.sf.layer_pattern "opencamera"
   resetprop persist.sys.sf.layer_ccm \
-    "0.6094,-0.8203,-0.3125,0,0.0469,1.8359,0.6094,0,-0.1172,-0.0469,0.3125,0,0,0,0,1" 
+    "0.6094,-0.8203,-0.3125,0,0.0469,1.8359,0.6094,0,-0.1172,-0.0469,0.3125,0,0,0,0,1"
 ---
- services/surfaceflinger/CompositionEngine/src/Output.cpp | 59 +59/-0
- 1 file changed, 59 insertions(+), 0 deletions(-)
+ .../CompositionEngine/src/Output.cpp          | 60 +++++++++++++++++++
+ 1 file changed, 60 insertions(+)
 
 diff --git a/services/surfaceflinger/CompositionEngine/src/Output.cpp b/services/surfaceflinger/CompositionEngine/src/Output.cpp
-index 15c35bc..1b1208c 100644
+index 15c35bc..012a5ff 100644
 --- a/services/surfaceflinger/CompositionEngine/src/Output.cpp
 +++ b/services/surfaceflinger/CompositionEngine/src/Output.cpp
-@@ -1308,6 +1308,55 @@ std::optional<base::unique_fd> Output::composeSurfaces(
+@@ -29,6 +29,7 @@
+ #include <compositionengine/impl/OutputLayerCompositionState.h>
+ #include <compositionengine/impl/planner/Planner.h>
+ #include <ftl/future.h>
++#include <math/mat4.h>
+ 
+ #include <thread>
+ 
+@@ -1308,6 +1309,55 @@ std::optional<base::unique_fd> Output::composeSurfaces(
  
      return base::unique_fd(fence->dup());
  }
@@ -80,7 +88,7 @@ index 15c35bc..1b1208c 100644
  
  std::vector<LayerFE::LayerSettings> Output::generateClientCompositionRequests(
        bool supportsProtectedContent, ui::Dataspace outputDataspace, std::vector<LayerFE*>& outLayerFEs) {
-@@ -1397,6 +1446,16 @@ std::vector<LayerFE::LayerSettings> Output::generateClientCompositionRequests(
+@@ -1397,6 +1447,16 @@ std::vector<LayerFE::LayerSettings> Output::generateClientCompositionRequests(
                      if (result.sourceDataspace == ui::Dataspace::UNKNOWN) {
                          result.sourceDataspace = ui::Dataspace::V0_SRGB;
                      }
