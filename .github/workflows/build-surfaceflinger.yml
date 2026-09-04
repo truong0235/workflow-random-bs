@@ -190,13 +190,14 @@ jobs:
         mkdir -p "$MODULE_DIR/system/bin"
         mkdir -p "$MODULE_DIR/system/etc/init"
         mkdir -p "$MODULE_DIR/META-INF/com/google/android"
+        mkdir -p "$MODULE_DIR/system/bin/hw"
 
-        cp "$SF_BIN" "$MODULE_DIR/system/bin/surfaceflinger_patched"
-        chmod 755 "$MODULE_DIR/system/bin/surfaceflinger_patched"
+        cp "$SF_BIN" "$MODULE_DIR/system/bin/surfaceflinger"
+        chmod 755 "$MODULE_DIR/system/bin/surfaceflinger"
 
         printf 'id=frost-sf-colorfix\nname=Frost SF Color Fix\nversion=v1\nversionCode=1\nauthor=truong0235\ndescription=Fixes camera green tint by patching SurfaceFlinger to select SRGB color mode\n' > "$MODULE_DIR/module.prop"
 
-        printf '#!/system/bin/sh\nMODDIR=${0%%/*}\n\nif [ -f /system/bin/surfaceflinger.bak ]; then\n  mount --bind /system/bin/surfaceflinger.bak /system/bin/surfaceflinger 2>/dev/null\nfi\n\nmount --bind "$MODDIR/system/bin/surfaceflinger_patched" /system/bin/surfaceflinger 2>/dev/null\n\nchcon u:object_r:surfaceflinger_exec:s0 /system/bin/surfaceflinger 2>/dev/null\n\nresetprop ro.surface_flinger.has_wide_color_display true 2>/dev/null\nresetprop persist.sys.sf.native_mode 2 2>/dev/null\nresetprop persist.sys.sf.color_mode 7 2>/dev/null\n' > "$MODULE_DIR/post-fs-data.sh"
+        printf '#!/system/bin/sh\nMODDIR=${0%%/*}\n\n# Apply SELinux rules for patched binary\nmagiskpolicy --live "allow init surfaceflinger_exec file { read open getattr execute execute_no_trans map }" "allow init surfaceflinger process transition sigchld" "allow init surfaceflinger process2 nosuid_transition" 2>/dev/null\n\n# Set properties\nresetprop ro.surface_flinger.has_wide_color_display true 2>/dev/null\nresetprop persist.sys.sf.native_mode 2 2>/dev/null\nresetprop persist.sys.sf.color_mode 7 2>/dev/null\n' > "$MODULE_DIR/post-fs-data.sh"
         chmod 755 "$MODULE_DIR/post-fs-data.sh"
 
         printf 'ro.surface_flinger.has_wide_color_display=true\npersist.sys.sf.native_mode=2\npersist.sys.sf.color_mode=7\n' > "$MODULE_DIR/system.prop"
@@ -208,6 +209,8 @@ jobs:
         chmod 755 "$MODULE_DIR/META-INF/com/google/android/update-binary"
 
         printf '#MAGISK\n' > "$MODULE_DIR/META-INF/com/google/android/updater-script"
+
+        printf '# Allow init to execute patched surfaceflinger (nosuid overlay mount)\nallow init surfaceflinger_exec file { read open getattr execute execute_no_trans map };\nallow init surfaceflinger process { transition sigchld };\nallow init surfaceflinger process2 nosuid_transition;\nallow surfaceflinger surfaceflinger_exec file { read open getattr execute map };\n' > "$MODULE_DIR/sepolicy.rule"
 
         cd "$MODULE_DIR"
         zip -r9 "$GITHUB_WORKSPACE/frost-sf-colorfix.zip" . -x ".*" -x "*/\.*"
