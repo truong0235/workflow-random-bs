@@ -1,22 +1,21 @@
-From 2c78339421dc98d7b117026ba5eb5d54d672c66e Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: truong0235 <truong0235@users.noreply.github.com>
-Date: Thu, 3 Sep 2026 23:00:10 +0700
-Subject: [PATCH] fix: move SRGB to isWideColorMode true branch
+Date: Thu, 4 Sep 2026 12:00:00 +0700
+Subject: [PATCH 1/4] fix: move SRGB to isWideColorMode true branch
 
-isWideColorMode() returns false for SRGB, preventing SurfaceFlinger
-from populating mColorModes map. This forces display to stay in
-NATIVE color mode, skipping sRGB transfer function application.
+The Poco C40 display only supports NATIVE and SRGB color modes. SRGB
+was classified as non-wide, preventing populateColorModes() from
+adding it to the mColorModes map. This caused getBestColorMode() to
+always return NATIVE, bypassing the sRGB transfer function.
 
-Camera preview shows green tint because camera CCM (color correction
-matrix) is computed but never applied to display output. Moving SRGB
-to the wide color modes allows SF to select SRGB mode, applying the
-sRGB transfer function and fixing the green tint.
+Moving SRGB to the isWideColorMode true branch allows it to be added
+to the color modes map and selected by pickColorMode().
 ---
- services/surfaceflinger/SurfaceFlinger.cpp | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ services/surfaceflinger/SurfaceFlinger.cpp | 2 +1/-1
+ 1 file changed, 1 insertions(+), 1 deletions(-)
 
 diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
-index b078bf2..6287c4a 100644
+index 494aa2c..68e35e9 100644
 --- a/services/surfaceflinger/SurfaceFlinger.cpp
 +++ b/services/surfaceflinger/SurfaceFlinger.cpp
 @@ -196,6 +196,7 @@ bool isWideColorMode(const ColorMode colorMode) {
@@ -37,3 +36,4 @@ index b078bf2..6287c4a 100644
      return false;
 -- 
 2.55.0
+

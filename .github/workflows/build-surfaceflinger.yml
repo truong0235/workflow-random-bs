@@ -96,17 +96,16 @@ jobs:
         git config --global user.name "GitHub Runner"
         cd frameworks/native
 
-        # Patch 1: isWideColorMode fix (SurfaceFlinger.cpp)
-        echo "=== Applying patch 1: isWideColorMode fix ==="
-        git am "${{ github.workspace }}/patches/0001-fix-wide-color-mode.patch"
-        git log --oneline -1
-
-        # Patches 2-4: Output.cpp fixes (outputDataspace, UNKNOWN override, per-layer CCM)
-        echo "=== Applying patches 2-4: Output.cpp fixes ==="
-        git am \
+        # Apply each patch individually
+        for patch in \
+          "${{ github.workspace }}/patches/0001-fix-wide-color-mode.patch" \
           "${{ github.workspace }}/patches/0002-fix-output-dataspace.patch" \
           "${{ github.workspace }}/patches/0003-fix-unknown-dataspace.patch" \
-          "${{ github.workspace }}/patches/0004-layer-color-transform.patch"
+          "${{ github.workspace }}/patches/0004-layer-color-transform.patch"; do
+          echo "=== Applying $(basename "$patch") ==="
+          git am "$patch"
+          git log --oneline -1
+        done
 
         echo "=== All patches applied ==="
         git log --oneline -4

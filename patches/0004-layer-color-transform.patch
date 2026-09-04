@@ -15,19 +15,19 @@ System properties:
 Example (camera CCM for Poco C40):
   resetprop persist.sys.sf.layer_pattern "opencamera"
   resetprop persist.sys.sf.layer_ccm \
-    "0.6094,-0.8203,-0.3125,0,0.0469,1.8359,0.6094,0,-0.1172,-0.0469,0.3125,0,0,0,0,1"
+    "0.6094,-0.8203,-0.3125,0,0.0469,1.8359,0.6094,0,-0.1172,-0.0469,0.3125,0,0,0,0,1" 
 ---
- services/surfaceflinger/CompositionEngine/src/Output.cpp | 50 +++++++++++++++++
- 1 file changed, 50 insertions(+)
+ services/surfaceflinger/CompositionEngine/src/Output.cpp | 59 +59/-0
+ 1 file changed, 59 insertions(+), 0 deletions(-)
 
 diff --git a/services/surfaceflinger/CompositionEngine/src/Output.cpp b/services/surfaceflinger/CompositionEngine/src/Output.cpp
-index abcdef1..1234567 100644
+index 15c35bc..1b1208c 100644
 --- a/services/surfaceflinger/CompositionEngine/src/Output.cpp
 +++ b/services/surfaceflinger/CompositionEngine/src/Output.cpp
-@@ -1310,6 +1310,54 @@ void Output::composeSurfaces(
+@@ -1308,6 +1308,55 @@ std::optional<base::unique_fd> Output::composeSurfaces(
+ 
      return base::unique_fd(fence->dup());
  }
- 
 +// Parse a comma-separated list of 16 floats into a mat4 (column-major)
 +static bool parseColorTransform(const char* str, math::mat4& outMatrix) {
 +    if (!str || !*str) return false;
@@ -77,10 +77,10 @@ index abcdef1..1234567 100644
 +    return valid;
 +}
 +
+ 
  std::vector<LayerFE::LayerSettings> Output::generateClientCompositionRequests(
        bool supportsProtectedContent, ui::Dataspace outputDataspace, std::vector<LayerFE*>& outLayerFEs) {
-     std::vector<LayerFE::LayerSettings> clientCompositionLayers;
-@@ -1393,6 +1441,16 @@ std::vector<LayerFE::LayerSettings> Output::generateClientCompositionRequests(
+@@ -1397,6 +1446,16 @@ std::vector<LayerFE::LayerSettings> Output::generateClientCompositionRequests(
                      if (result.sourceDataspace == ui::Dataspace::UNKNOWN) {
                          result.sourceDataspace = ui::Dataspace::V0_SRGB;
                      }

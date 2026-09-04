@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: truong0235 <truong0235@users.noreply.github.com>
 Date: Thu, 4 Sep 2026 12:00:00 +0700
-Subject: [PATCH 2/3] fix: force outputDataspace in composeSurfaces
+Subject: [PATCH 2/4] fix: force outputDataspace in composeSurfaces
 
 Remove the hasWideColorGamut() gate on outputDataspace in
 composeSurfaces(). This ensures the GPU always uses the display's
@@ -13,14 +13,15 @@ is forced to UNKNOWN, causing the RenderEngine to skip sRGB transfer
 function application and use default (BT.601) YUV-to-RGB conversion
 for all layers.
 ---
- services/surfaceflinger/CompositionEngine/src/Output.cpp | 5 ++---
+ services/surfaceflinger/CompositionEngine/src/Output.cpp | 5 +2/-3
  1 file changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/services/surfaceflinger/CompositionEngine/src/Output.cpp b/services/surfaceflinger/CompositionEngine/src/Output.cpp
-index abcdef1..1234567 100644
+index d0c5803..83859bc 100644
 --- a/services/surfaceflinger/CompositionEngine/src/Output.cpp
 +++ b/services/surfaceflinger/CompositionEngine/src/Output.cpp
-@@ -1200,9 +1200,8 @@ void Output::composeSurfaces(
+@@ -1200,9 +1200,8 @@ std::optional<base::unique_fd> Output::composeSurfaces(
+     clientCompositionDisplay.clip = outputState.layerStackSpace.getContent();
      clientCompositionDisplay.orientation =
              ui::Transform::toRotationFlags(outputState.displaySpace.getOrientation());
 -    clientCompositionDisplay.outputDataspace = mDisplayColorProfile->hasWideColorGamut()
