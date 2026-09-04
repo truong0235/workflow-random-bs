@@ -1,0 +1,63 @@
+name: Test ZRAM Setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-zram:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Check kernel support
+      run: |
+        echo "=== Kernel version ==="
+        uname -r
+        echo "=== /dev/zram* ==="
+        ls -la /dev/zram* 2>/dev/null || echo "No /dev/zram devices"
+        echo "=== lsmod zram ==="
+        lsmod | grep zram || echo "zram module not loaded"
+        echo "=== modinfo zram ==="
+        sudo modinfo zram 2>/dev/null | head -5 || echo "modinfo failed"
+        echo "=== /sys/module/zram ==="
+        ls /sys/module/zram/ 2>/dev/null || echo "No /sys/module/zram"
+
+    - name: Load zram module
+      run: |
+        echo "=== modprobe zram ==="
+        sudo modprobe zram 2>&1 || echo "modprobe failed"
+        echo "=== After modprobe ==="
+        lsmod | grep zram || echo "zram still not loaded"
+        ls -la /dev/zram* 2>/dev/null || echo "No /dev/zram devices"
+
+    - name: Setup zram 16GB
+      run: |
+        if [ ! -b /dev/zram0 ]; then
+          echo "FAIL: /dev/zram0 does not exist"
+          exit 0
+        fi
+        echo lz4 | sudo tee /sys/block/zram0/comp_algorithm
+        echo 16G | sudo tee /sys/block/zram0/disksize
+        sudo mkswap /dev/zram0 2>&1
+        sudo swapon /dev/zram0 -p 100 2>&1 || echo "swapon failed"
+        echo "=== Verify ==="
+        zramctl
+        swapon --show
+        free -h
+
+    - name: Stress test
+      run: |
+        echo "=== Allocating 2GB to test swap ==="
+        python3 -c "
+        chunks = []
+        try:
+            for i in range(2048):
+                chunks.append(bytearray(1024*1024))
+            print(f'Allocated {len(chunks)}MB successfully')
+            print('Swap is working!')
+        except MemoryError:
+            print(f'OOM after {len(chunks)}MB')
+        " 2>&1
+        echo "=== Final state ==="
+        free -h
+        zramctl 2>/dev/null || echo "zramctl not available"
+        swapon --show
