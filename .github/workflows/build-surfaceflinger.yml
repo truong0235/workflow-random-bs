@@ -6,7 +6,7 @@ on:
       AOSP_BRANCH:
         description: 'AOSP manifest branch'
         required: true
-        default: 'android-13.0.0_r51'
+        default: 'android-13.0.0_r73'
 
 jobs:
   build:
@@ -15,7 +15,7 @@ jobs:
     permissions:
       contents: write
     env:
-      AOSP_BRANCH: ${{ inputs.AOSP_BRANCH || 'android-13.0.0_r51' }}
+      AOSP_BRANCH: ${{ inputs.AOSP_BRANCH || 'android-13.0.0_r73' }}
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
