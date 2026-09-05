@@ -6,7 +6,7 @@ on:
       AOSP_BRANCH:
         description: 'AOSP manifest branch'
         required: true
-        default: 'android-13.0.0_r73'
+        default: 'android-13.0.0_r51'
 
 jobs:
   build:
@@ -15,7 +15,7 @@ jobs:
     permissions:
       contents: write
     env:
-      AOSP_BRANCH: ${{ inputs.AOSP_BRANCH || 'android-13.0.0_r73' }}
+      AOSP_BRANCH: ${{ inputs.AOSP_BRANCH || 'android-13.0.0_r51' }}
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
@@ -195,29 +195,16 @@ jobs:
         fi
 
         mkdir -p "$MODULE_DIR/system/bin"
-        mkdir -p "$MODULE_DIR/system/etc/init"
-        mkdir -p "$MODULE_DIR/META-INF/com/google/android"
-        mkdir -p "$MODULE_DIR/system/bin/hw"
 
         cp "$SF_BIN" "$MODULE_DIR/system/bin/surfaceflinger"
         chmod 755 "$MODULE_DIR/system/bin/surfaceflinger"
 
-        printf 'id=frost-sf-colorfix\nname=Frost SF Color Fix\nversion=v2\nversionCode=2\nauthor=truong0235\ndescription=Fixes camera green tint and video pink tint by patching SurfaceFlinger color pipeline\n' > "$MODULE_DIR/module.prop"
-
-        printf '#!/system/bin/sh\nMODDIR=${0%%/*}\n\n# Apply SELinux rules for patched binary\nmagiskpolicy --live "allow init surfaceflinger_exec file { read open getattr execute execute_no_trans map }" "allow init surfaceflinger process transition sigchld" "allow init surfaceflinger process2 nosuid_transition" 2>/dev/null\n\n# Set properties for display color mode\nresetprop ro.surface_flinger.has_wide_color_display true 2>/dev/null\nresetprop persist.sys.sf.native_mode 2 2>/dev/null\nresetprop persist.sys.sf.color_mode 7 2>/dev/null\n\n# Set per-layer color correction for camera preview\n# Camera CCM from hi1337 sensor (rational[9] converted to float)\nresetprop persist.sys.sf.layer_pattern "opencamera" 2>/dev/null\nresetprop persist.sys.sf.layer_ccm "0.6094,-0.8203,-0.3125,0,0.0469,1.8359,0.6094,0,-0.1172,-0.0469,0.3125,0,0,0,0,1" 2>/dev/null\n' > "$MODULE_DIR/post-fs-data.sh"
-        chmod 755 "$MODULE_DIR/post-fs-data.sh"
-
-        printf 'ro.surface_flinger.has_wide_color_display=true\npersist.sys.sf.native_mode=2\npersist.sys.sf.color_mode=7\npersist.sys.sf.layer_pattern=opencamera\npersist.sys.sf.layer_ccm=0.6094,-0.8203,-0.3125,0,0.0469,1.8359,0.6094,0,-0.1172,-0.0469,0.3125,0,0,0,0,1\n' > "$MODULE_DIR/system.prop"
-
-        printf '#!/system/bin/sh\nwhile [ "$(getprop sys.boot_completed)" != "1" ]; do\n  sleep 1\ndone\nsleep 5\nservice call SurfaceFlinger 1023 i32 2 i32 7 2>/dev/null\n' > "$MODULE_DIR/service.sh"
-        chmod 755 "$MODULE_DIR/service.sh"
+        printf 'id=frost-sf-colorfix\nname=Frost SF Color Fix\nversion=v3\nversionCode=3\nauthor=truong0235\ndescription=Binary-only patched surfaceflinger with isWideColorMode fix (SRGB counted as wide color)\n' > "$MODULE_DIR/module.prop"
 
         printf '#!/sbin/sh\numask 022\nui_print() { echo "$1"; }\nrequire_new_magisk() {\n  ui_print " Please install Magisk v20.4+! "\n  exit 1\n}\nOUTFD=$2\nZIPFILE=$3\nmount /data 2>/dev/null\n[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk\n. /data/adb/magisk/util_functions.sh\n[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk\ninstall_module\nexit 0\n' > "$MODULE_DIR/META-INF/com/google/android/update-binary"
         chmod 755 "$MODULE_DIR/META-INF/com/google/android/update-binary"
 
         printf '#MAGISK\n' > "$MODULE_DIR/META-INF/com/google/android/updater-script"
-
-        printf '# Allow init to execute patched surfaceflinger (nosuid overlay mount)\nallow init surfaceflinger_exec file { read open getattr execute execute_no_trans map };\nallow init surfaceflinger process { transition sigchld };\nallow init surfaceflinger process2 nosuid_transition;\nallow surfaceflinger surfaceflinger_exec file { read open getattr execute map };\n' > "$MODULE_DIR/sepolicy.rule"
 
         cd "$MODULE_DIR"
         zip -r9 "$GITHUB_WORKSPACE/frost-sf-colorfix.zip" . -x ".*" -x "*/\.*"
