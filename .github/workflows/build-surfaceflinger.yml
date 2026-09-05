@@ -100,7 +100,7 @@ jobs:
         for patch in \
           "${{ github.workspace }}/patches/0001-fix-wide-color-mode.patch" \
           "${{ github.workspace }}/patches/0002-fix-output-dataspace.patch" \
-          "${{ github.workspace }}/patches/0003-fix-unknown-dataspace.patch"; do
+          "${{ github.workspace }}/patches/0003-fix-unknown-source-dataspace.patch"; do
           echo "=== Applying $(basename "$patch") ==="
           git am "$patch"
           git log --oneline -1

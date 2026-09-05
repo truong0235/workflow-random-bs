@@ -1,0 +1,18 @@
+diff --git a/services/surfaceflinger/Layer.cpp b/services/surfaceflinger/Layer.cpp
+index aff94d1..2b499c5 100644
+--- a/services/surfaceflinger/Layer.cpp
++++ b/services/surfaceflinger/Layer.cpp
+@@ -611,6 +611,13 @@ std::optional<compositionengine::LayerFE::LayerSettings> Layer::prepareClientCom
+                 HAL_DATASPACE_TRANSFER_SRGB);
+     }
+ 
++    // Frost fix: vendor camera/video HAL reports UNKNOWN dataspace for NV12 buffers.
++    // Force to V0_SRGB so RenderEngine applies correct YUV→RGB transfer function.
++    // Without this, NV12 layers use linear/unknown transfer -> green/violet tint.
++    if (layerSettings.sourceDataspace == ui::Dataspace::UNKNOWN) {
++        layerSettings.sourceDataspace = ui::Dataspace::V0_SRGB;
++    }
++
+     layerSettings.whitePointNits = targetSettings.whitePointNits;
+     switch (targetSettings.blurSetting) {
+         case LayerFE::ClientCompositionTargetSettings::BlurSetting::Enabled:
