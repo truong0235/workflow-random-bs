@@ -1,3 +1,24 @@
+From 3144140acb7f055f690f60588b6639b09c8cbcaf Mon Sep 17 00:00:00 2001
+From: mikaxd <mikaxd@gmail.com>
+Date: Sun, 6 Sep 2026 04:03:28 +0700
+Subject: [PATCH] fix: force UNKNOWN sourceDataspace to V0_SRGB for
+ camera/video NV12
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Vendor camera/video HAL reports UNKNOWN dataspace for NV12 buffers.
+Force to V0_SRGB so RenderEngine applies correct YUV-to-RGB transfer
+function. Without this, NV12 layers use linear/unknown transfer which
+causes green tint (camera) and violet tint (video).
+
+This is the companion fix to the mTreat170mAsSrgb property — covers
+the case where the buffer has dataspace=0x0 (UNKNOWN) rather than
+SMPTE 170M transfer.
+---
+ services/surfaceflinger/Layer.cpp | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
 diff --git a/services/surfaceflinger/Layer.cpp b/services/surfaceflinger/Layer.cpp
 index aff94d1..2b499c5 100644
 --- a/services/surfaceflinger/Layer.cpp
@@ -7,7 +28,7 @@ index aff94d1..2b499c5 100644
      }
  
 +    // Frost fix: vendor camera/video HAL reports UNKNOWN dataspace for NV12 buffers.
-+    // Force to V0_SRGB so RenderEngine applies correct YUV→RGB transfer function.
++    // Force to V0_SRGB so RenderEngine applies correct YUV-to-RGB transfer function.
 +    // Without this, NV12 layers use linear/unknown transfer -> green/violet tint.
 +    if (layerSettings.sourceDataspace == ui::Dataspace::UNKNOWN) {
 +        layerSettings.sourceDataspace = ui::Dataspace::V0_SRGB;
@@ -16,3 +37,6 @@ index aff94d1..2b499c5 100644
      layerSettings.whitePointNits = targetSettings.whitePointNits;
      switch (targetSettings.blurSetting) {
          case LayerFE::ClientCompositionTargetSettings::BlurSetting::Enabled:
+-- 
+2.55.0
+
