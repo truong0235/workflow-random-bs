@@ -1,26 +1,15 @@
-From 3144140acb7f055f690f60588b6639b09c8cbcaf Mon Sep 17 00:00:00 2001
-From: mikaxd <mikaxd@gmail.com>
-Date: Sun, 6 Sep 2026 04:03:28 +0700
+From 2f9b27a760ea82be9c7e3e2d0cd4d10ed230037a Mon Sep 17 00:00:00 2001
+From: truong0235 <truong0235@users.noreply.github.com>
+Date: Sun, 6 Sep 2026 04:06:41 +0700
 Subject: [PATCH] fix: force UNKNOWN sourceDataspace to V0_SRGB for
  camera/video NV12
-MIME-Version: 1.0
-Content-Type: text/plain; charset=UTF-8
-Content-Transfer-Encoding: 8bit
 
-Vendor camera/video HAL reports UNKNOWN dataspace for NV12 buffers.
-Force to V0_SRGB so RenderEngine applies correct YUV-to-RGB transfer
-function. Without this, NV12 layers use linear/unknown transfer which
-causes green tint (camera) and violet tint (video).
-
-This is the companion fix to the mTreat170mAsSrgb property — covers
-the case where the buffer has dataspace=0x0 (UNKNOWN) rather than
-SMPTE 170M transfer.
 ---
  services/surfaceflinger/Layer.cpp | 7 +++++++
  1 file changed, 7 insertions(+)
 
 diff --git a/services/surfaceflinger/Layer.cpp b/services/surfaceflinger/Layer.cpp
-index aff94d1..2b499c5 100644
+index aff94d1..c6481fd 100644
 --- a/services/surfaceflinger/Layer.cpp
 +++ b/services/surfaceflinger/Layer.cpp
 @@ -611,6 +611,13 @@ std::optional<compositionengine::LayerFE::LayerSettings> Layer::prepareClientCom
