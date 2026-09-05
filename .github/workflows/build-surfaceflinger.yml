@@ -200,46 +200,17 @@ jobs:
         chmod 755 "$MODULE_DIR/system/bin/surfaceflinger"
 
         # module.prop
-        cat > "$MODULE_DIR/module.prop" << 'MODPROP'
-id=frost-sf-colorfix
-name=Frost SF Color Fix
-version=v4
-versionCode=4
-author=truong0235
-description=Patched surfaceflinger + color props for Poco C40 camera/video green/violet tint fix
-MODPROP
+        printf 'id=frost-sf-colorfix\nname=Frost SF Color Fix\nversion=v4\nversionCode=4\nauthor=truong0235\ndescription=Patched surfaceflinger + color props for Poco C40 camera/video green/violet tint fix\n' > "$MODULE_DIR/module.prop"
 
-        # system.prop — force color management and 170M→sRGB transfer fix
-        cat > "$MODULE_DIR/system.prop" << 'SYSPROP'
-# Force wide color display to enable populateColorModes()
-ro.surface_flinger.has_wide_color_display=true
-# Force display color mode to SRGB (2=ENHANCED, 7=SRGB)
-persist.sys.sf.native_mode=2
-persist.sys.sf.color_mode=7
-# CRITICAL: Treat SMPTE 170M transfer as sRGB — fixes camera/video YUV→RGB conversion
-# This is the root cause of green tint (camera) and violet tint (video)
-debug.sf.treat_170m_as_sRGB=1
-SYSPROP
+        # system.prop — force color management and 170M->sRGB transfer fix
+        printf '# Force wide color display to enable populateColorModes()\nro.surface_flinger.has_wide_color_display=true\n# Force display color mode to SRGB (2=ENHANCED, 7=SRGB)\npersist.sys.sf.native_mode=2\npersist.sys.sf.color_mode=7\n# CRITICAL: Treat SMPTE 170M transfer as sRGB - fixes camera/video YUV to RGB conversion\n# This is the root cause of green tint (camera) and violet tint (video)\ndebug.sf.treat_170m_as_sRGB=1\n' > "$MODULE_DIR/system.prop"
 
         # post-fs-data.sh — apply SELinux rules for patched binary
-        cat > "$MODULE_DIR/post-fs-data.sh" << 'POSTFS'
-#!/system/bin/sh
-# Allow init to execute patched surfaceflinger
-magiskpolicy --live \
-  "allow init surfaceflinger_exec file { read open getattr execute execute_no_trans map }" \
-  "allow init surfaceflinger process { transition sigchld }" \
-  "allow init surfaceflinger process2 nosuid_transition" \
-  2>/dev/null
-POSTFS
+        printf '#!/system/bin/sh\n# Allow init to execute patched surfaceflinger\nmagiskpolicy --live "allow init surfaceflinger_exec file { read open getattr execute execute_no_trans map }" "allow init surfaceflinger process { transition sigchld }" "allow init surfaceflinger process2 nosuid_transition" 2>/dev/null\n' > "$MODULE_DIR/post-fs-data.sh"
         chmod 755 "$MODULE_DIR/post-fs-data.sh"
 
         # service.sh — force SRGB color mode after boot
-        cat > "$MODULE_DIR/service.sh" << 'SVC'
-#!/system/bin/sh
-while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 1; done
-sleep 3
-service call SurfaceFlinger 1023 i32 2 i32 7 2>/dev/null
-SVC
+        printf '#!/system/bin/sh\nwhile [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 1; done\nsleep 3\nservice call SurfaceFlinger 1023 i32 2 i32 7 2>/dev/null\n' > "$MODULE_DIR/service.sh"
         chmod 755 "$MODULE_DIR/service.sh"
 
         # Meta-inf installer
