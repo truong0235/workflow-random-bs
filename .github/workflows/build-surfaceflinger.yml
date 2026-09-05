@@ -199,11 +199,53 @@ jobs:
         cp "$SF_BIN" "$MODULE_DIR/system/bin/surfaceflinger"
         chmod 755 "$MODULE_DIR/system/bin/surfaceflinger"
 
-        printf 'id=frost-sf-colorfix\nname=Frost SF Color Fix\nversion=v3\nversionCode=3\nauthor=truong0235\ndescription=Binary-only patched surfaceflinger with isWideColorMode fix (SRGB counted as wide color)\n' > "$MODULE_DIR/module.prop"
+        # module.prop
+        cat > "$MODULE_DIR/module.prop" << 'MODPROP'
+id=frost-sf-colorfix
+name=Frost SF Color Fix
+version=v4
+versionCode=4
+author=truong0235
+description=Patched surfaceflinger + color props for Poco C40 camera/video green/violet tint fix
+MODPROP
 
+        # system.prop — force color management and 170M→sRGB transfer fix
+        cat > "$MODULE_DIR/system.prop" << 'SYSPROP'
+# Force wide color display to enable populateColorModes()
+ro.surface_flinger.has_wide_color_display=true
+# Force display color mode to SRGB (2=ENHANCED, 7=SRGB)
+persist.sys.sf.native_mode=2
+persist.sys.sf.color_mode=7
+# CRITICAL: Treat SMPTE 170M transfer as sRGB — fixes camera/video YUV→RGB conversion
+# This is the root cause of green tint (camera) and violet tint (video)
+debug.sf.treat_170m_as_sRGB=1
+SYSPROP
+
+        # post-fs-data.sh — apply SELinux rules for patched binary
+        cat > "$MODULE_DIR/post-fs-data.sh" << 'POSTFS'
+#!/system/bin/sh
+# Allow init to execute patched surfaceflinger
+magiskpolicy --live \
+  "allow init surfaceflinger_exec file { read open getattr execute execute_no_trans map }" \
+  "allow init surfaceflinger process { transition sigchld }" \
+  "allow init surfaceflinger process2 nosuid_transition" \
+  2>/dev/null
+POSTFS
+        chmod 755 "$MODULE_DIR/post-fs-data.sh"
+
+        # service.sh — force SRGB color mode after boot
+        cat > "$MODULE_DIR/service.sh" << 'SVC'
+#!/system/bin/sh
+while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 1; done
+sleep 3
+service call SurfaceFlinger 1023 i32 2 i32 7 2>/dev/null
+SVC
+        chmod 755 "$MODULE_DIR/service.sh"
+
+        # Meta-inf installer
+        mkdir -p "$MODULE_DIR/META-INF/com/google/android"
         printf '#!/sbin/sh\numask 022\nui_print() { echo "$1"; }\nrequire_new_magisk() {\n  ui_print " Please install Magisk v20.4+! "\n  exit 1\n}\nOUTFD=$2\nZIPFILE=$3\nmount /data 2>/dev/null\n[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk\n. /data/adb/magisk/util_functions.sh\n[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk\ninstall_module\nexit 0\n' > "$MODULE_DIR/META-INF/com/google/android/update-binary"
         chmod 755 "$MODULE_DIR/META-INF/com/google/android/update-binary"
-
         printf '#MAGISK\n' > "$MODULE_DIR/META-INF/com/google/android/updater-script"
 
         cd "$MODULE_DIR"
@@ -238,7 +280,10 @@ jobs:
           # - isWideColorMode: SRGB counted as wide color for display mode selection
           # - composeSurfaces: outputDataspace always uses display color mode
           # - UNKNOWN dataspace override: vendor NV12 layers use BT.709 conversion
-          # - Per-layer colorTransform: camera CCM applied via system property
+          # - system.prop: has_wide_color_display=true, native_mode=2, color_mode=7
+          # - system.prop: debug.sf.treat_170m_as_sRGB=1 (fixes camera/video green/violet tint)
+          # - post-fs-data.sh: SELinux rules for patched binary
+          # - service.sh: service call 1023 to force SRGB after boot
           # Install via APatch/Magisk Manager
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
