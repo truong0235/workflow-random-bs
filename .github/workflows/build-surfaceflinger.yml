@@ -1,6 +1,11 @@
 name: Build Patched surfaceflinger
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'patches/**'
+      - '.github/workflows/build-surfaceflinger.yml'
   workflow_dispatch:
     inputs:
       AOSP_BRANCH:
