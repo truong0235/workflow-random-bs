@@ -147,7 +147,7 @@ jobs:
         MONITOR_PID=$!
 
         . build/envsetup.sh
-        lunch treble_arm64_bvN-userdebug
+        lunch treble_arm64_bvS-userdebug
 
         BUILD_START=$(date +%s)
         echo "::group::Build started at $(date)"
