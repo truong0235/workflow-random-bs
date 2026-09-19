@@ -80,7 +80,8 @@ jobs:
 
     - name: Add treble manifest
       run: |
-        git clone https://github.com/TrebleDroid/treble_manifest \
+        rm -rf treble_manifest;
+        git clone https://github.com/TrebleDroid/treble_manifest; \
           .repo/local_manifests \
           -b ${{ env.ANDROID_VERSION }}
         rm -f .repo/local_manifests/replace.xml
@@ -121,15 +122,15 @@ jobs:
         done
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
-    - name: Free disk after sync
-      run: |
-        echo "=== Disk before cleanup ==="
-        df -h /home/runner/work
-        du -sh .repo/
-        rm -rf .repo
-        echo "=== Disk after cleanup ==="
-        df -h /home/runner/work
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+    # - name: Free disk after sync
+    #   run: |
+    #     echo "=== Disk before cleanup ==="
+    #     df -h /home/runner/work
+    #     du -sh .repo/
+    #     rm -rf .repo
+    #     echo "=== Disk after cleanup ==="
+    #     df -h /home/runner/work
+    #   working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Generate device config
       run: |
