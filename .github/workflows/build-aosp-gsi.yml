@@ -45,7 +45,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt install -y git aria2 \
+        sudo apt install -y git aria2 wget\
           bc bison flex gperf lib32z1-dev libc6-dev-i386 \
           libxml2-utils xsltproc fontconfig liblz4-tool lzop \
           squashfs-tools schedtool libreadline-dev lib32readline-dev \
@@ -61,6 +61,7 @@ jobs:
 
     - name: Initialize workspace
       run: |
+        ccache --set-config max_size=30G
         mkdir -p workspace
         cd workspace
         echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
@@ -69,7 +70,7 @@ jobs:
     - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
       with:
-        swap-size-gb: 2
+        swap-size-gb: 12
 
     - name: Repo init AOSP
       run: |
@@ -107,6 +108,7 @@ jobs:
 
     - name: Apply patches
       run: |
+        
         find patches -name "*.patch" -type f | sort | while read patch; do
           project_name=$(echo "$patch" | sed 's|^patches/||; s|/[^/]*$||')
           project_dir=$(echo "$project_name" | sed 's|^platform_||; s|_|/|g')
