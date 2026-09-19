@@ -45,7 +45,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt install -y git aria2 wget\
+        sudo apt install -y git aria2 wget parallel\
           bc bison flex gperf lib32z1-dev libc6-dev-i386 ccache\
           libxml2-utils xsltproc fontconfig liblz4-tool lzop \
           squashfs-tools schedtool libreadline-dev lib32readline-dev \
@@ -96,7 +96,7 @@ jobs:
       run: |
         SYNC_START=$(date +%s)
         repo sync -c --no-tags --no-clone-bundle \
-          --force-sync -j$(nproc)
+          --force-sync -j2
         SYNC_END=$(date +%s)
         SYNC_ELAPSED=$(( SYNC_END - SYNC_START ))
         echo "Sync time: $(( SYNC_ELAPSED / 3600 ))h $(( SYNC_ELAPSED % 3600 / 60 ))m $(( SYNC_ELAPSED % 60 ))s"
