@@ -21,7 +21,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: docker-runner-selfhost
     permissions:
       contents: write
     env:
