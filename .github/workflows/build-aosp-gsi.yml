@@ -80,7 +80,7 @@ jobs:
 
     - name: Add treble manifest
       run: |
-        git clone https://github.com/TrebleDroid/treble_manifest; \
+        git clone https://github.com/TrebleDroid/treble_manifest \
           .repo/local_manifests \
           -b ${{ env.ANDROID_VERSION }}
         rm -f .repo/local_manifests/replace.xml
