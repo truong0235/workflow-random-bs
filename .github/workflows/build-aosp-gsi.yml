@@ -160,14 +160,14 @@ jobs:
 
     - name: Build system image
       run: |
-        # Start background monitor: logs every 60s
-        (
-          while true; do
-            echo "$(date +%H:%M:%S) | MEM: $(free -h | awk '/Mem/{print $3"/"$2}') | SWAP: $(free -h | awk '/Swap/{print $3"/"$2}') | DISK: $(df -h /home/runner/work | awk 'NR==2{print $3"/"$2}') | PROCS: $(ps aux | grep -E 'ninja|clang|java' | grep -v grep | wc -l)"
-            sleep 60
-          done
-        ) > /tmp/monitor.log 2>&1 &
-        MONITOR_PID=$!
+        # # Start background monitor: logs every 60s
+        # (
+        #   while true; do
+        #     echo "$(date +%H:%M:%S) | MEM: $(free -h | awk '/Mem/{print $3"/"$2}') | SWAP: $(free -h | awk '/Swap/{print $3"/"$2}') | DISK: $(df -h /home/runner/work | awk 'NR==2{print $3"/"$2}') | PROCS: $(ps aux | grep -E 'ninja|clang|java' | grep -v grep | wc -l)"
+        #     sleep 60
+        #   done
+        # ) > /tmp/monitor.log 2>&1 &
+        # MONITOR_PID=$!
 
         . build/envsetup.sh
         lunch treble_arm64_bvN-userdebug
@@ -175,39 +175,39 @@ jobs:
         BUILD_START=$(date +%s)
         echo "::group::Build started at $(date)"
         make WITHOUT_CHECK_API=true -j$(nproc) systemimage 2>&1 | tee /tmp/build.log
-        BUILD_EXIT=$?
-        BUILD_END=$(date +%s)
-        BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
+        # BUILD_EXIT=$?
+        # BUILD_END=$(date +%s)
+        # BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
 
-        kill $MONITOR_PID 2>/dev/null || true
+        # kill $MONITOR_PID 2>/dev/null || true
 
-        echo "::endgroup::"
-        echo "Build exit code: $BUILD_EXIT"
-        echo "Build time: $(( BUILD_ELAPSED / 3600 ))h $(( BUILD_ELAPSED % 3600 / 60 ))m $(( BUILD_ELAPSED % 60 ))s"
-        echo "::group::Resource usage during build"
-        cat /tmp/monitor.log
-        echo "::endgroup::"
-        echo "::group::Last 50 lines of build log"
-        tail -50 /tmp/build.log
-        echo "::endgroup::"
+        # echo "::endgroup::"
+        # echo "Build exit code: $BUILD_EXIT"
+        # echo "Build time: $(( BUILD_ELAPSED / 3600 ))h $(( BUILD_ELAPSED % 3600 / 60 ))m $(( BUILD_ELAPSED % 60 ))s"
+        # echo "::group::Resource usage during build"
+        # cat /tmp/monitor.log
+        # echo "::endgroup::"
+        # echo "::group::Last 50 lines of build log"
+        # tail -50 /tmp/build.log
+        # echo "::endgroup::"
 
-        exit $BUILD_EXIT
+        # exit $BUILD_EXIT
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
-    - name: Free disk and compress
-      run: |
-        echo "=== Disk before cleanup ==="
-        df -h /home/runner/work
-        echo "=== Cleaning symbols and host tools ==="
-        rm -rf out/target/product/*/symbols
-        rm -rf out/host
-        echo "=== Disk after cleanup ==="
-        df -h /home/runner/work
-        echo "=== Compressing system image ==="
-        xz -9 -T0 -v -z out/target/product/phh_treble/system.img
-        echo "=== Final disk usage ==="
-        df -h /home/runner/work
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+    # - name: Free disk and compress
+    #   run: |
+    #     echo "=== Disk before cleanup ==="
+    #     df -h /home/runner/work
+    #     echo "=== Cleaning symbols and host tools ==="
+    #     rm -rf out/target/product/*/symbols
+    #     rm -rf out/host
+    #     echo "=== Disk after cleanup ==="
+    #     df -h /home/runner/work
+    #     echo "=== Compressing system image ==="
+    #     xz -9 -T0 -v -z out/target/product/phh_treble/system.img
+    #     echo "=== Final disk usage ==="
+    #     df -h /home/runner/work
+    #   working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v1
