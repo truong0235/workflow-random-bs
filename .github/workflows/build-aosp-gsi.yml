@@ -9,7 +9,7 @@ on:
       AOSP_BRANCH:
         description: 'AOSP manifest branch'
         required: true
-        default: 'android-11.0'
+        default: 'android-11.0.0_r48'
       ANDROID_VERSION:
         description: 'Android version for treble manifests'
         required: true
