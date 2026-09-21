@@ -98,7 +98,7 @@ jobs:
 
     - name: Download and extract treble patches
       run: |
-        wget -q ${{ env.CUSTOM_PATCH }} -o patches.zip
+        wget -q ${{ env.CUSTOM_PATCH }} -O patches.zip
         mkdir -p patches && unzip -o patches.zip -d patches ;
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
