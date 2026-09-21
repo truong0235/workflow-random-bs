@@ -91,7 +91,7 @@ jobs:
     - name: Repo init AOSP
       run: |
         repo init -u https://android.googlesource.com/platform/manifest \
-          -b ${{ env.AOSP_BRANCH }} --depth=1
+          -b ${{ env.AOSP_BRANCH }}
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Add treble manifest
