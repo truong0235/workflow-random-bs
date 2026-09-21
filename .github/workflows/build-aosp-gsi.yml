@@ -141,6 +141,7 @@ jobs:
 
     - name: Check resources before build
       run: |
+        set +e
         echo "=== Memory ==="
         free -h
         echo "=== Disk ==="
