@@ -20,7 +20,7 @@ on:
         default: 'arm64-ab-vanilla-nosu'
       CUSTOM_PATCH:
         description: 'Patchs url that will apply'
-        required: false
+        required: true
         default: 'https://github.com/phhusson/treble_experimentations/releases/download/v313/patches.zip'
       CUSTOM_MANIFEST:
         description: 'Manifest git url that will apply'
@@ -35,6 +35,8 @@ jobs:
       AOSP_BRANCH: ${{ inputs.AOSP_BRANCH || 'android-11.0.0_r48' }}
       ANDROID_VERSION: ${{ inputs.ANDROID_VERSION || 'android-11.0' }}
       CUSTOM_BUILD: ${{ inputs.CUSTOM_BUILD || 'arm64-ab-vanilla-nosu' }}
+      CUSTOM_PATCH: ${{ inputs.CUSTOM_PATCH || 'https://github.com/phhusson/treble_experimentations/releases/download/v313/patches.zip' }}
+      CUSTOM_MANIFEST: ${{ inputs.CUSTOM_MANIFEST || 'https://github.com/phhusson/treble_manifest' }}
     steps:
     - name: Free disk space
       run: |
@@ -96,8 +98,8 @@ jobs:
 
     - name: Download and extract treble patches
       run: |
-        wget -q ${{ env.CUSTOM_PATCH }}
-        mkdir -p patches && unzip -o patches-for-developers.zip -d patches ;
+        wget -q ${{ env.CUSTOM_PATCH }} -o patches.zip
+        mkdir -p patches && unzip -o patches.zip -d patches ;
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Sync source
