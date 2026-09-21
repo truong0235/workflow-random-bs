@@ -95,7 +95,6 @@ jobs:
 
     - name: Sync source
       run: |
-        set +e
         SYNC_START=$(date +%s)
         repo sync -c --no-tags --no-clone-bundle \
           --force-sync -j2
@@ -103,7 +102,7 @@ jobs:
         SYNC_ELAPSED=$(( SYNC_END - SYNC_START ))
         echo "Sync time: $(( SYNC_ELAPSED / 3600 ))h $(( SYNC_ELAPSED % 3600 / 60 ))m $(( SYNC_ELAPSED % 60 ))s"
         echo "=== Disk after sync ==="
-        df -h /home/runner/work
+        df -h 
         echo "=== Source size ==="
         du -sh .
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
