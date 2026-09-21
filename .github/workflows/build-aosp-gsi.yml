@@ -1,9 +1,11 @@
 name: Build AOSP GSI
 
-
 on:
-  #push:
-   # branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'patches/**'
+      - '.github/workflows/build-aosp-gsi.yml'
   workflow_dispatch:
     inputs:
       AOSP_BRANCH:
@@ -84,62 +86,80 @@ jobs:
     - name: Repo init AOSP
       run: |
         repo init -u https://android.googlesource.com/platform/manifest \
-          -b ${{ env.AOSP_BRANCH }} --depth=1 ;
+          -b ${{ env.AOSP_BRANCH }} --depth=1
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Add treble manifest
       run: |
-        rm -rf .repo/local_manifests 
+        rm -rf .repo/local_manifests
         git clone ${{ env.CUSTOM_MANIFEST }} \
           .repo/local_manifests \
-          -b ${{ env.ANDROID_VERSION }} |
-        rm -f .repo/local_manifests/replace.xml 
+          -b ${{ env.ANDROID_VERSION }}
+        rm -f .repo/local_manifests/replace.xml
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Download and extract treble patches
       run: |
         wget -q ${{ env.CUSTOM_PATCH }} -O patches.zip
-        mkdir -p patches && unzip -o patches.zip -d patches ;
+        unzip -o patches.zip -d patches
+        echo "=== Patch structure ==="
+        find patches -type d | head -30
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Sync source
       run: |
         SYNC_START=$(date +%s)
         repo sync -c --no-tags --no-clone-bundle \
-          --force-sync -j2
+          --force-sync -j4
         SYNC_END=$(date +%s)
         SYNC_ELAPSED=$(( SYNC_END - SYNC_START ))
         echo "Sync time: $(( SYNC_ELAPSED / 3600 ))h $(( SYNC_ELAPSED % 3600 / 60 ))m $(( SYNC_ELAPSED % 60 ))s"
         echo "=== Disk after sync ==="
-        df -h 
+        df -h
         echo "=== Source size ==="
         du -sh .
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Apply patches
       run: |
-        
+        AOSP_ROOT="$(pwd)"
+        APPLIED=0
+        FAILED=0
+        SKIP=0
         find patches -name "*.patch" -type f | sort | while read patch; do
+          # Absolute path to patch file (patches are in AOSP workspace, not repo)
+          PATCH_ABS="$(pwd)/$patch"
+          # Strip patches/ prefix, then strip trailing filename to get project path
+          # e.g. patches/patches/platform_frameworks_av/0001-foo.patch
+          #   -> patches/platform_frameworks_av  (after first sed)
+          #   -> platform_frameworks_av           (strip nested patches/ prefix)
           project_name=$(echo "$patch" | sed 's|^patches/||; s|/[^/]*$||')
+          # Handle nested patches/ from zip structure
+          project_name=$(echo "$project_name" | sed 's|^patches/||')
+          # Convert underscores to slashes, strip platform_ prefix
           project_dir=$(echo "$project_name" | sed 's|^platform_||; s|_|/|g')
           if [ -d "$project_dir" ]; then
-            echo "Applying to $project_dir"
-            (cd "$project_dir" && git am "$GITHUB_WORKSPACE/$patch")
+            echo "Applying $patch -> $project_dir"
+            (cd "$project_dir" && git am --keep-cr "$PATCH_ABS") || {
+              echo "git am failed for $patch, trying git apply"
+              (cd "$AOSP_ROOT" && git apply --directory="$project_dir" "$PATCH_ABS") || {
+                echo "FAILED: $patch"
+              }
+            }
           else
-            echo "Skip $project_dir (not found)"
+            echo "Skip $patch (target $project_dir not found)"
           fi
         done
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
-    # - name: Free disk after sync
-    #   run: |
-    #     echo "=== Disk before cleanup ==="
-    #     df -h /home/runner/work
-    #     du -sh .repo/
-    #     rm -rf .repo
-    #     echo "=== Disk after cleanup ==="
-    #     df -h /home/runner/work
-    #   working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+    - name: Free disk after sync
+      run: |
+        echo "=== Disk before cleanup ==="
+        df -h
+        rm -rf .repo
+        echo "=== Disk after cleanup ==="
+        df -h
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Generate device config
       run: |
@@ -149,65 +169,69 @@ jobs:
 
     - name: Check resources before build
       run: |
-        set +e
         echo "=== Memory ==="
         free -h
         echo "=== Disk ==="
-        df -h /home/runner/work
+        df -h
         echo "=== CPU ==="
         nproc
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Build system image
       run: |
-        # # Start background monitor: logs every 60s
-        # (
-        #   while true; do
-        #     echo "$(date +%H:%M:%S) | MEM: $(free -h | awk '/Mem/{print $3"/"$2}') | SWAP: $(free -h | awk '/Swap/{print $3"/"$2}') | DISK: $(df -h /home/runner/work | awk 'NR==2{print $3"/"$2}') | PROCS: $(ps aux | grep -E 'ninja|clang|java' | grep -v grep | wc -l)"
-        #     sleep 60
-        #   done
-        # ) > /tmp/monitor.log 2>&1 &
-        # MONITOR_PID=$!
-
         . build/envsetup.sh
         lunch treble_arm64_bvN-userdebug
 
         BUILD_START=$(date +%s)
         echo "::group::Build started at $(date)"
-        make WITHOUT_CHECK_API=true -j$(nproc) systemimage 2>&1 | tee /tmp/build.log
-        # BUILD_EXIT=$?
-        # BUILD_END=$(date +%s)
-        # BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
+        make WITHOUT_CHECK_API=true -j4 systemimage 2>&1 | tee /tmp/build.log
+        BUILD_EXIT=${PIPESTATUS[0]}
+        BUILD_END=$(date +%s)
+        BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
 
-        # kill $MONITOR_PID 2>/dev/null || true
+        echo "::endgroup::"
+        echo "Build exit code: $BUILD_EXIT"
+        echo "Build time: $(( BUILD_ELAPSED / 3600 ))h $(( BUILD_ELAPSED % 3600 / 60 ))m $(( BUILD_ELAPSED % 60 ))s"
+        echo "::group::Last 50 lines of build log"
+        tail -50 /tmp/build.log
+        echo "::endgroup::"
 
-        # echo "::endgroup::"
-        # echo "Build exit code: $BUILD_EXIT"
-        # echo "Build time: $(( BUILD_ELAPSED / 3600 ))h $(( BUILD_ELAPSED % 3600 / 60 ))m $(( BUILD_ELAPSED % 60 ))s"
-        # echo "::group::Resource usage during build"
-        # cat /tmp/monitor.log
-        # echo "::endgroup::"
-        # echo "::group::Last 50 lines of build log"
-        # tail -50 /tmp/build.log
-        # echo "::endgroup::"
+        if [ "$BUILD_EXIT" -ne 0 ]; then
+          echo "Build FAILED with exit code $BUILD_EXIT"
+          exit $BUILD_EXIT
+        fi
 
-        # exit $BUILD_EXIT
+        echo "=== Verifying output ==="
+        SF_BIN="$(find out/target/product -path '*/system/bin/surfaceflinger' -type f | head -n 1)"
+        if [ -n "$SF_BIN" ]; then
+          echo "Found surfaceflinger: $SF_BIN"
+          file "$SF_BIN"
+          ls -lh "$SF_BIN"
+          md5sum "$SF_BIN"
+        fi
+
+        echo "=== system.img ==="
+        ls -lh out/target/product/phh_treble/system.img 2>/dev/null || echo "system.img not found"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
-    # - name: Free disk and compress
-    #   run: |
-    #     echo "=== Disk before cleanup ==="
-    #     df -h /home/runner/work
-    #     echo "=== Cleaning symbols and host tools ==="
-    #     rm -rf out/target/product/*/symbols
-    #     rm -rf out/host
-    #     echo "=== Disk after cleanup ==="
-    #     df -h /home/runner/work
-    #     echo "=== Compressing system image ==="
-    #     xz -9 -T0 -v -z out/target/product/phh_treble/system.img
-    #     echo "=== Final disk usage ==="
-    #     df -h /home/runner/work
-    #   working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+    - name: Free disk and compress
+      run: |
+        echo "=== Disk before cleanup ==="
+        df -h
+        echo "=== Cleaning symbols and host tools ==="
+        rm -rf out/target/product/*/symbols
+        rm -rf out/host
+        echo "=== Disk after cleanup ==="
+        df -h
+        if [ -f out/target/product/phh_treble/system.img ]; then
+          echo "=== Compressing system image ==="
+          xz -3 -T0 -v out/target/product/phh_treble/system.img
+          echo "=== Final disk usage ==="
+          df -h
+        else
+          echo "WARNING: system.img not found, skipping compression"
+        fi
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v1
