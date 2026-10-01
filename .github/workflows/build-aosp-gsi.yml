@@ -56,7 +56,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt install -y git aria2 wget parallel\
+        sudo apt install -y git aria2 wget parallel zip \
           bc bison flex gperf lib32z1-dev libc6-dev-i386 ccache\
           libxml2-utils xsltproc fontconfig liblz4-tool lzop \
           squashfs-tools schedtool libreadline-dev lib32readline-dev \
