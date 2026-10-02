@@ -1,4 +1,4 @@
-name: Build AOSP GSI
+name: Build AOSP GSI selfhost
 
 on:
   push:
