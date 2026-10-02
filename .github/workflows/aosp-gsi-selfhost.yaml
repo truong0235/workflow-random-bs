@@ -1,0 +1,254 @@
+name: Build AOSP GSI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'patches/**'
+      - '.github/workflows/build-aosp-gsi.yml'
+  workflow_dispatch:
+    inputs:
+      AOSP_BRANCH:
+        description: 'AOSP manifest branch'
+        required: true
+        default: 'android-11.0.0_r48'
+      ANDROID_VERSION:
+        description: 'Android version for treble manifests'
+        required: true
+        default: 'android-11.0'
+      CUSTOM_BUILD:
+        description: 'GSI variant (e.g. arm64-ab-vanilla-nosu)'
+        required: true
+        default: 'arm64-ab-vanilla-nosu'
+      CUSTOM_PATCH:
+        description: 'Patchs url that will apply'
+        required: true
+        default: 'https://github.com/phhusson/treble_experimentations/releases/download/v313/patches.zip'
+      CUSTOM_MANIFEST:
+        description: 'Manifest git url that will apply'
+        required: true
+        default: 'https://github.com/phhusson/treble_manifest'
+jobs:
+  build:
+    runs-on: self-hosted
+    permissions:
+      contents: write
+    env:
+      AOSP_BRANCH: ${{ inputs.AOSP_BRANCH || 'android-11.0.0_r48' }}
+      ANDROID_VERSION: ${{ inputs.ANDROID_VERSION || 'android-11.0' }}
+      CUSTOM_BUILD: ${{ inputs.CUSTOM_BUILD || 'arm64-ab-vanilla-nosu' }}
+      CUSTOM_PATCH: ${{ inputs.CUSTOM_PATCH || 'https://github.com/phhusson/treble_experimentations/releases/download/v313/patches.zip' }}
+      CUSTOM_MANIFEST: ${{ inputs.CUSTOM_MANIFEST || 'https://github.com/phhusson/treble_manifest' }}
+    steps:
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/local/lib/android || true
+        sudo rm -rf /usr/share/dotnet || true
+        sudo rm -rf /opt/ghc || true
+        sudo rm -rf /usr/local/share/boost || true
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
+        sudo rm -rf /opt/hostedtoolcache || true
+        sudo docker system prune -af || true
+        df -h
+
+    - name: Cleanup
+      uses: rokibhasansagar/slimhub_actions@main
+
+    - name: Install dependencies
+      run: |
+        sudo apt install -y git aria2 wget parallel zip \
+          bc bison flex gperf lib32z1-dev libc6-dev-i386 ccache\
+          libxml2-utils xsltproc fontconfig liblz4-tool lzop \
+          squashfs-tools schedtool libreadline-dev lib32readline-dev \
+          pngcrush imagemagick python3-all-dev
+
+        wget -q http://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2_amd64.deb
+        wget -q http://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libncurses5_6.3-2_amd64.deb
+        sudo dpkg -i libtinfo5_6.3-2_amd64.deb libncurses5_6.3-2_amd64.deb
+
+        sudo curl --create-dirs -L -o /usr/local/bin/repo \
+          https://storage.googleapis.com/git-repo-downloads/repo
+        sudo chmod a+rx /usr/local/bin/repo
+
+    - name: Initialize workspace
+      run: |
+        ccache --set-config max_size=30G
+        mkdir -p workspace
+        cd workspace
+        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
+      id: pwd
+
+    - name: Clean workspace
+      run: |
+        rm -rf .repo
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    # - name: Set Swap Space
+    #   uses: pierotofy/set-swap-space@master
+    #   with:
+    #     swap-size-gb: 12
+
+    - name: Repo init AOSP
+      run: |
+        repo init -u https://android.googlesource.com/platform/manifest \
+          -b ${{ env.AOSP_BRANCH }}
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Add treble manifest
+      run: |
+        rm -rf .repo/local_manifests
+        git clone ${{ env.CUSTOM_MANIFEST }} \
+          .repo/local_manifests \
+          -b ${{ env.ANDROID_VERSION }}
+        rm -f .repo/local_manifests/replace.xml
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Download and extract treble patches
+      run: |
+        wget -q ${{ env.CUSTOM_PATCH }} -O patches.zip
+        unzip -o patches.zip -d patches
+        echo "=== Patch structure ==="
+        find patches -type d | head -30
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Sync source
+      run: |
+        SYNC_START=$(date +%s)
+        repo sync -c --no-tags --no-clone-bundle \
+          --force-sync -j4
+        SYNC_END=$(date +%s)
+        SYNC_ELAPSED=$(( SYNC_END - SYNC_START ))
+        echo "Sync time: $(( SYNC_ELAPSED / 3600 ))h $(( SYNC_ELAPSED % 3600 / 60 ))m $(( SYNC_ELAPSED % 60 ))s"
+        echo "=== Disk after sync ==="
+        df -h
+        echo "=== Source size ==="
+        du -sh .
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Apply patches
+      run: |
+        AOSP_ROOT="$(pwd)"
+        APPLIED=0
+        FAILED=0
+        SKIP=0
+        find patches -name "*.patch" -type f | sort | while read patch; do
+          # Absolute path to patch file (patches are in AOSP workspace, not repo)
+          PATCH_ABS="$(pwd)/$patch"
+          # Strip patches/ prefix, then strip trailing filename to get project path
+          # e.g. patches/patches/platform_frameworks_av/0001-foo.patch
+          #   -> patches/platform_frameworks_av  (after first sed)
+          #   -> platform_frameworks_av           (strip nested patches/ prefix)
+          project_name=$(echo "$patch" | sed 's|^patches/||; s|/[^/]*$||')
+          # Handle nested patches/ from zip structure
+          project_name=$(echo "$project_name" | sed 's|^patches/||')
+          # Convert underscores to slashes, strip platform_ prefix
+          project_dir=$(echo "$project_name" | sed 's|^platform_||; s|_|/|g')
+          if [ -d "$project_dir" ]; then
+            echo "Applying $patch -> $project_dir"
+            (cd "$project_dir" && git am --keep-cr "$PATCH_ABS") || {
+              echo "git am failed for $patch, trying git apply"
+              (cd "$AOSP_ROOT" && git apply --directory="$project_dir" "$PATCH_ABS") || {
+                echo "FAILED: $patch"
+              }
+            }
+          else
+            echo "Skip $patch (target $project_dir not found)"
+          fi
+        done
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Free disk after sync
+      run: |
+        echo "=== Disk before cleanup ==="
+        df -h
+        rm -rf .repo
+        echo "=== Disk after cleanup ==="
+        df -h
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Generate device config
+      run: |
+        cd device/phh/treble
+        bash generate.sh
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Check resources before build
+      run: |
+        echo "=== Memory ==="
+        free -h
+        echo "=== Disk ==="
+        df -h
+        echo "=== CPU ==="
+        nproc
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Build system image
+      run: |
+        . build/envsetup.sh
+        lunch treble_arm64_bvN-userdebug
+
+        BUILD_START=$(date +%s)
+        echo "::group::Build started at $(date)"
+        make WITHOUT_CHECK_API=true -j4 systemimage 2>&1 | tee /tmp/build.log
+        BUILD_EXIT=${PIPESTATUS[0]}
+        BUILD_END=$(date +%s)
+        BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
+
+        echo "::endgroup::"
+        echo "Build exit code: $BUILD_EXIT"
+        echo "Build time: $(( BUILD_ELAPSED / 3600 ))h $(( BUILD_ELAPSED % 3600 / 60 ))m $(( BUILD_ELAPSED % 60 ))s"
+        echo "::group::Last 50 lines of build log"
+        tail -50 /tmp/build.log
+        echo "::endgroup::"
+
+        if [ "$BUILD_EXIT" -ne 0 ]; then
+          echo "Build FAILED with exit code $BUILD_EXIT"
+          exit $BUILD_EXIT
+        fi
+
+        echo "=== Verifying output ==="
+        SF_BIN="$(find out/target/product -path '*/system/bin/surfaceflinger' -type f | head -n 1)"
+        if [ -n "$SF_BIN" ]; then
+          echo "Found surfaceflinger: $SF_BIN"
+          file "$SF_BIN"
+          ls -lh "$SF_BIN"
+          md5sum "$SF_BIN"
+        fi
+
+        echo "=== system.img ==="
+        ls -lh out/target/product/phh_treble/system.img 2>/dev/null || echo "system.img not found"
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Free disk and compress
+      run: |
+        echo "=== Disk before cleanup ==="
+        df -h
+        echo "=== Cleaning symbols and host tools ==="
+        rm -rf out/target/product/*/symbols
+        rm -rf out/host
+        echo "=== Disk after cleanup ==="
+        df -h
+        if [ -f out/target/product/phh_treble/system.img ]; then
+          echo "=== Compressing system image ==="
+          xz -3 -T0 -v out/target/product/phh_treble/system.img
+          echo "=== Final disk usage ==="
+          df -h
+        else
+          echo "WARNING: system.img not found, skipping compression"
+        fi
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ${{ steps.pwd.outputs.workspace-folder }}/out/target/product/phh_treble/system.img.xz
+        name: AOSP-GSI-${{ github.run_id }}
+        tag_name: ${{ github.run_id }}
+        body: |
+          # ROM: AOSP GSI
+          # Variant: ${{ env.CUSTOM_BUILD }}
+          # AOSP Branch: ${{ env.AOSP_BRANCH }}
+          # Target: arm64 A/B
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
